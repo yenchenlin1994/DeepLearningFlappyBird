@@ -103,9 +103,11 @@ def trainNetwork(s, readout, h_fc1, sess):
     # saving and loading networks
     saver = tf.train.Saver()
     sess.run(tf.initialize_all_variables())
-    checkpoint = tf.train.get_checkpoint_state("saved_networks")
+    checkpoint_dir = "saved_networks" 
+    checkpoint = tf.train.get_checkpoint_state(checkpoint_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
-        saver.restore(sess, checkpoint.model_checkpoint_path)
+        whole_path = ''.join([checkpoint_dir,'/',checkpoint.model_checkpoint_path])
+        saver.restore(sess, whole_path)
         print "Successfully loaded:", checkpoint.model_checkpoint_path
     else:
         print "Could not find old network weights"
