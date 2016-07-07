@@ -1,11 +1,11 @@
 # Using Deep Q-Network to Learn How To Play Flappy Bird
 
 <img src="./images/flappy_bird_demp.gif" width="250">
-原作者：yenchenlin 
-修改者：JT
-       安装说明： linux 系统
-       首先安装 pip (或 Python3 的 pip3 ):       sudo apt-get install python-pip python-dev
-       安装 TensorFlow：                          
+#原作者：yenchenlin 
+#修改者：JT
+       #安装说明： linux 系统
+       #首先安装 pip (或 Python3 的 pip3 ):       sudo apt-get install python-pip python-dev
+       #安装 TensorFlow：                          
                         # Ubuntu/Linux 64-bit, CPU only, Python 2.7:
                         $ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.8.0-cp27-none-linux_x86_64.whl
                         
