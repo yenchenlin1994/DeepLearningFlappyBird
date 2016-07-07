@@ -1,5 +1,6 @@
 # Using Deep Q-Network to Learn How To Play Flappy Bird
-
+原作者：yenchenlin
+修改者：JT
 <img src="./images/flappy_bird_demp.gif" width="250">
 
 7 mins version: [DQN for flappy bird](https://www.youtube.com/watch?v=THhUXIhjkCM)
