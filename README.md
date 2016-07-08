@@ -2,6 +2,16 @@
 
 <img src="./images/flappy_bird_demp.gif" width="250">
 
+7 mins version: [DQN for flappy bird](https://www.youtube.com/watch?v=THhUXIhjkCM)
+
+## Overview
+This project follows the description of the Deep Q Learning algorithm described in Playing Atari with Deep Reinforcement Learning [2] and shows that this learning algorithm can be further generalized to the notorious Flappy Bird.
+
+## Installation Dependencies:
+* Python 2.7 or 3
+* TensorFlow 0.7
+* pygame
+* OpenCV-Python
     #Installation Tutorial for linux operating system
     #install pip (or Python3  pip3 ):       sudo apt-get install python-pip python-dev
     #install TensorFlow：                          
@@ -18,18 +28,7 @@
                         # Ubuntu/Linux 64-bit, GPU enabled, Python 3.4. Requires CUDA toolkit 7.5 and CuDNN v4.
                         # For other versions, see "Install from sources" below.
                         $ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.8.0-cp34-cp34m-linux_x86_64.whl
-         install opencv   ：sudo apt-get install python-opencv               
-7 mins version: [DQN for flappy bird](https://www.youtube.com/watch?v=THhUXIhjkCM)
-
-## Overview
-This project follows the description of the Deep Q Learning algorithm described in Playing Atari with Deep Reinforcement Learning [2] and shows that this learning algorithm can be further generalized to the notorious Flappy Bird.
-
-## Installation Dependencies:
-* Python 2.7 or 3
-* TensorFlow 0.7
-* pygame
-* OpenCV-Python
-
+         install opencv   ：sudo apt-get install python-opencv  
 ## How to Run?
 ```
 git clone https://github.com/yenchenlin1994/DeepLearningFlappyBird.git
