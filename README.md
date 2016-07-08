@@ -13,8 +13,8 @@ This project follows the description of the Deep Q Learning algorithm described 
 * pygame
 * OpenCV-Python
   #Installation Tutorial for linux operating system
-     install pip (or Python3  pip3 ):       sudo apt-get install python-pip python-dev
-     install TensorFlow：                          
+     #install pip (or Python3  pip3 ):       sudo apt-get install python-pip python-dev
+     #install TensorFlow：                          
                     # Ubuntu/Linux 64-bit, CPU only, Python 2.7:
                     $ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.8.0-cp27-none-linux_x86_64.whl
                     
@@ -28,7 +28,7 @@ This project follows the description of the Deep Q Learning algorithm described 
                     # Ubuntu/Linux 64-bit, GPU enabled, Python 3.4. Requires CUDA toolkit 7.5 and CuDNN v4.
                     # For other versions, see "Install from sources" below.
                     $ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.8.0-cp34-cp34m-linux_x86_64.whl
-     install opencv   ：sudo apt-get install python-opencv  
+     #install opencv   ：sudo apt-get install python-opencv  
 ## How to Run?
 ```
 git clone https://github.com/yenchenlin1994/DeepLearningFlappyBird.git
