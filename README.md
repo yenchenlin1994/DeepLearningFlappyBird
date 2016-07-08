@@ -2,9 +2,9 @@
 
 <img src="./images/flappy_bird_demp.gif" width="250">
 
-    #安装说明： linux 系统
-    #首先安装 pip (或 Python3 的 pip3 ):       sudo apt-get install python-pip python-dev
-    #安装 TensorFlow：                          
+    #Installation Tutorial for linux operating system
+    #install pip (or Python3  pip3 ):       sudo apt-get install python-pip python-dev
+    #install TensorFlow：                          
                         # Ubuntu/Linux 64-bit, CPU only, Python 2.7:
                         $ sudo pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-0.8.0-cp27-none-linux_x86_64.whl
                         
@@ -18,7 +18,7 @@
                         # Ubuntu/Linux 64-bit, GPU enabled, Python 3.4. Requires CUDA toolkit 7.5 and CuDNN v4.
                         # For other versions, see "Install from sources" below.
                         $ sudo pip3 install --upgrade https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.8.0-cp34-cp34m-linux_x86_64.whl
-         安装 opencv   ：sudo apt-get install python-opencv               
+         install opencv   ：sudo apt-get install python-opencv               
 7 mins version: [DQN for flappy bird](https://www.youtube.com/watch?v=THhUXIhjkCM)
 
 ## Overview
