@@ -11,7 +11,8 @@ This project follows the description of the Deep Q Learning algorithm described 
 * Python 2.7 or 3
 * TensorFlow 0.7
 * pygame
-* OpenCV-Python      
+* OpenCV-Python 
+
 ##Installation Tutorial for linux operating system:    
   install pip (or Python3  pip3 ):sudo apt-get install python-pip python-dev   
   install TensorFlow:   
