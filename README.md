@@ -75,7 +75,7 @@ end for
 
 注意并不像[1]，[1]中初始化ϵ = 1，在接下来的3000000画面中，我线性地将ϵ从0.1退火到0.0001。我这么做的原因是代理器可以每隔0.03s(FPS=30)选择一次游戏中的动作，过高的ϵ会使得小鸟拍打的次数过多，因此很容易使得小鸟趋于屏幕的顶端并且最终傻了吧唧地撞到管子。这种情况会使得Q函数收敛的相对较慢，因为它只有在ϵ值较低的时候，才能识别其他情况。
 然而，在其他游戏中，ϵ有时被初始化为1甚至更合理。
-During training time, at each time step, the network samples minibatches of size 32 from the replay memory to train on, and performs a gradient step on the loss function described above using the Adam optimization algorithm with a learning rate of 0.000001. After annealing finishes, the network continues to train indefinitely, with ϵ fixed at 0.001.
+
 在训练的每一步中，此网络的样本最小捆绑尺寸为32，从重复记忆中训练，并且是使用的Adam优化器对损失函数进行的梯度下降，学习率为0.000001。之后每一次训练结束，此网络都会继续无限的训练，这时ϵ固定在0.001。
 ## FAQ
 
