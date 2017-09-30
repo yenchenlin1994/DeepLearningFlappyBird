@@ -1,6 +1,6 @@
 # 使用DQN（Deep Q-Network）网络学习如何玩转Flappy Bird
 
-<img src="./images/flappy_bird_demp.gif" width="250">
+<img src="../images/flappy_bird_demp.gif" width="250">
 
 7分钟版本 : [DQN for flappy bird](https://www.youtube.com/watch?v=THhUXIhjkCM)
 
