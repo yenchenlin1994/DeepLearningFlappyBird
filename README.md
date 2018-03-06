@@ -12,6 +12,8 @@ This project follows the description of the Deep Q Learning algorithm described 
 * TensorFlow 0.7
 * pygame
 * OpenCV-Python
+just run this command
+pip install -r requirments.txt
 
 ## How to Run?
 ```
