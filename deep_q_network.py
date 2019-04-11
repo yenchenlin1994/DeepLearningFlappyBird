@@ -150,7 +150,7 @@ def trainNetwork(s, readout, h_fc1, sess):
         # only train if done observing
         if t > OBSERVE:
             # sample a minibatch to train on
-            minibatch = random.sample(D, BATCH)
+            minibatch = random.sample(list(D), BATCH)
 
             # get the batch variables
             s_j_batch = [d[0] for d in minibatch]
