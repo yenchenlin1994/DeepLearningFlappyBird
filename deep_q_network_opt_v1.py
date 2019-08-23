@@ -27,6 +27,14 @@ import random
 import numpy as np
 from collections import deque
 
+# const for advesarial optimization:
+# flap = [0, 1]
+# noaction = [1, 0]
+action_target = [0, 1]
+LR = 0.01 # learning rate for optimizing ds
+# number of time steps in which to calculate ds, first 10 frames of game
+INTERVAL = 10
+
 GAME = 'bird' # the name of the game being played for log files
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
@@ -165,32 +173,76 @@ def trainNetwork(s, readout, h_fc1, sess):
             D.popleft()
 
         # only train if done observing
-        if t > OBSERVE:
-            # sample a minibatch to train on
-            minibatch = random.sample(list(D), BATCH)
+        if t > INTERVAL:
+            # sample a minibatch to optimize on
+            opt_batch = random.sample(list(D), INTERVAL)
 
             # get the batch variables
-            s_j_batch = [d[0] for d in minibatch]
-            a_batch = [d[1] for d in minibatch]
-            r_batch = [d[2] for d in minibatch]
-            s_j1_batch = [d[3] for d in minibatch]
+            s_opt_batch = [d[0] for d in opt_batch]
 
-            y_batch = []
-            readout_j1_batch = readout.eval(feed_dict = {s : s_j1_batch})
-            for i in range(0, len(minibatch)):
-                terminal = minibatch[i][4]
-                # if terminal, only equals reward
-                if terminal:
-                    y_batch.append(r_batch[i])
-                else:
-                    y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
+            s_ds = np.ndarray((INTERVAL, 80, 80, 4), dtype=float) # forward init.
 
+            # a_batch = [d[1] for d in minibatch]
+            # r_batch = [d[2] for d in minibatch]
+            # s_j1_batch = [d[3] for d in minibatch]
+
+            # y_batch = []
+            # readout_j_batch = readout.eval(feed_dict = {s : s_j_batch})
+            # readout_j1_batch = readout.eval(feed_dict = {s : s_j1_batch})
+            # for i in range(0, len(minibatch)):
+            #     terminal = minibatch[i][4]
+            #     # if terminal, only equals reward
+            #     if terminal:
+            #         y_batch.append(r_batch[i])
+            #     else:
+            #         y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
+
+            # IN ATTACK FORMULATION NOT NECESSARY, WE WANT TO RETAIN WEIGHTS, BUT TAKE THE PARAMS INTO ATTACK OPERATION
             # perform gradient step
-            train_step.run(feed_dict = {
-                y : y_batch,
-                a : a_batch,
-                s : s_j_batch}
-            )
+            # train_step.run(feed_dict = {
+            #     y : y_batch,
+            #     a : a_batch,
+            #     s : s_j_batch}
+            # )
+
+            # taking params into attack operation:
+            # intake batch of s_t, a_t, r_t, s_t1 resulted from a normal controller devised optimization, across batch by modulating ds,
+            # reduce the sum (expected) loss between Q(s+ds, a^t) and Q(s+ds, a), where a^t != a.
+            # subjects: batch of s_t, a_t, r_t, s_t1, size BATCH.
+            # Note: the training is complete, so in theory we shouldn't be using this as a SGD batch anymore.
+            #
+            #
+            # theory/idea:
+            # RL is less suceptible to a stationary attack since reproducing a setting is challenging. We can go through an
+            # interaction, record it, and then produce an optimization which will abuse that origional interaction, but when
+            # will that come in handy? In CV, usually repeated inputs are easy to produce, but in an RL setting there isn't
+            # opportunity for repeated input.
+            # if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
+
+            # gaussian noise, 1 set of perturbations which will be added to 4 frames
+            # same noise across every frame within stack within data set
+            # image data not normalized, gaussian distribution must bee scaled to [0, 255]
+            delta_s = tf.constant(np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80,4)))
+
+            # input and noise which should result in target action to be drawn
+            s_ds = s_opt_batch + delta_s
+
+            # Q values for both actions at state s + ds for entire batch
+            readout_s_ds = readout.eval(feed_dict={s : [s_ds][0]})
+
+            # readout(s) = [Q(no flap), Q(flap)]
+            # a = readout[target_action]
+            a = tf.placeholder("float", INTERVAL) # readout_s_ds[1]
+            a = readout_s_ds[:,0]
+
+            # b = readout[!target_action]
+            b = tf.placeholder("float", INTERVAL) # readout_s_ds[0]
+            b =  readout_s_ds[:,1]
+
+            eps = 1 # Q values are typically 10- 30
+            loss = tf.nn.relu(b - (a + eps))
+            opt = tf.train.AdamOptimizer(LR).minimize(loss,var_list=(delta_s))
+            # opt.run(feed_dict={})
 
         # update the old values
         s_t = s_t1
@@ -219,18 +271,6 @@ def trainNetwork(s, readout, h_fc1, sess):
             h_file.write(",".join([str(x) for x in h_fc1.eval(feed_dict={s:[s_t]})[0]]) + '\n')
             cv2.imwrite("logs_tetris/frame" + str(t) + ".png", x_t1)
         '''
-
-#
-# intake batch of (s, a, s', r) resulted from a normal controller devised optimization
-#
-# theory/idea:
-# RL is less suceptible to a stationary attack since reproducing a setting is challenging. We can go through an
-# interaction, record it, and then produce an optimization which will abuse that origional interaction, but when
-# will that come in handy? In CV, usually repeated inputs are easy to produce, but in an RL setting there isn't
-# opportunity for repeated input.
-# if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
-def train_input():
-
 
 def playGame():
     sess = tf.InteractiveSession()
