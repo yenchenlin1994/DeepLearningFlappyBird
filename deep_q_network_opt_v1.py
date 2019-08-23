@@ -222,7 +222,7 @@ def trainNetwork(s, readout, h_fc1, sess):
             # gaussian noise, 1 set of perturbations which will be added to 4 frames
             # same noise across every frame within stack within data set
             # image data not normalized, gaussian distribution must bee scaled to [0, 255]
-            delta_s = tf.constant(np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80,4)))
+            delta_s = np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80,4))
 
             # input and noise which should result in target action to be drawn
             s_ds = s_opt_batch + delta_s
