@@ -100,13 +100,13 @@ def createNetwork():
 
     return s, readout, h_fc1
 
-def trainNetwork(s, readout, h_fc1, delta_s, sess):
+def trainNetwork(s, readout, h_fc1, sess):
     # define the cost function
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
     readout_action = tf.reduce_sum(tf.multiply(readout, a), reduction_indices=1)
     cost = tf.reduce_mean(tf.square(y - readout_action))
-    train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
+    # train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
     # open up a game state to communicate with emulator
     game_state = game.GameState()
@@ -210,7 +210,8 @@ def trainNetwork(s, readout, h_fc1, delta_s, sess):
             # reduce the sum (expected) loss between Q(s+ds, a^t) and Q(s+ds, a), where a^t != a.
             # subjects: batch of s_t, a_t, r_t, s_t1, size BATCH.
             # Note: the training is complete, so in theory we shouldn't be using this as a SGD batch anymore.
-            #
+            # Note: in this formulation, we are letting s + ds form by optimizing s to meet our objective. There is no
+            # explicit ds added, it is formed.
             #
             # theory/idea:
             # RL is less suceptible to a stationary attack since reproducing a setting is challenging. We can go through an
@@ -218,9 +219,6 @@ def trainNetwork(s, readout, h_fc1, delta_s, sess):
             # will that come in handy? In CV, usually repeated inputs are easy to produce, but in an RL setting there isn't
             # opportunity for repeated input.
             # if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
-
-            # input and noise which should result in target action to be drawn
-            s_ds = np.reshape(s_opt_batch,[INTERVAL, 80, 80, 4]) + delta_s
 
             # Q values for both actions at state s + ds for entire batch
             # you just need to feed into s
@@ -240,8 +238,8 @@ def trainNetwork(s, readout, h_fc1, delta_s, sess):
 
             eps = 1 # Q values are typically 10- 30
             loss = tf.nn.relu(b - a + eps)
-            opt = tf.train.AdamOptimizer(LR).minimize(loss, var_list=(delta_s))
-            # opt.run(feed_dict={})
+            opt = tf.train.AdamOptimizer(LR).minimize(loss, var_list=(s_opt_batch))
+            opt.run()
 
         # update the old values
         s_t = s_t1
@@ -274,19 +272,13 @@ def trainNetwork(s, readout, h_fc1, delta_s, sess):
 def playGame():
     sess = tf.InteractiveSession()
     s, readout, h_fc1 = createNetwork()
-
-    # subject of optimization
-    # gaussian noise, 1 set of perturbations which will be added to 4 frames
-    # same noise across every frame within stack within data set
-    # image data not normalized, gaussian distribution must bee scaled to [0, 255]
-    # tensor = np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80, 4))
-    tensor = (tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))))
-    delta_s = tf.Variable(initial_value=tensor, trainable=True)
-
-    trainNetwork(s, readout, h_fc1, delta_s, sess)
+    trainNetwork(s, readout, h_fc1, sess)
 
 def main():
     playGame()
 
 if __name__ == "__main__":
     main()
+
+# after digging in the tf src i think i need to better specify the subject of the optimization. maybe implict isnt the way to go.
+# comment prev. src so they are up to date.
