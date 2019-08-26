@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#*
 
 # distinction between dqn (vanilla) and this:
 # we want to formulate an addition to state, s, called "delta s", ds, which will cause the Q value of s+ds and a
