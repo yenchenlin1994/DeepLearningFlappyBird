@@ -100,7 +100,7 @@ def createNetwork():
 
     return s, readout, h_fc1
 
-def trainNetwork(s, readout, h_fc1, sess):
+def trainNetwork(s, readout, h_fc1, delta_s, sess):
     # define the cost function
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
@@ -219,16 +219,15 @@ def trainNetwork(s, readout, h_fc1, sess):
             # opportunity for repeated input.
             # if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
 
-            # gaussian noise, 1 set of perturbations which will be added to 4 frames
-            # same noise across every frame within stack within data set
-            # image data not normalized, gaussian distribution must bee scaled to [0, 255]
-            delta_s = np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80,4))
-
             # input and noise which should result in target action to be drawn
-            s_ds = s_opt_batch + delta_s
+            s_ds = np.reshape(s_opt_batch,[INTERVAL, 80, 80, 4]) + delta_s
 
             # Q values for both actions at state s + ds for entire batch
-            readout_s_ds = readout.eval(feed_dict={s : [s_ds][0]})
+            # you just need to feed into s
+            # ds generates automatically
+            # then you use s+ds as your new input
+            # talk after meeting have Q's
+            readout_s_ds = readout.eval(feed_dict={s : [s_opt_batch][0]})
 
             # readout(s) = [Q(no flap), Q(flap)]
             # a = readout[target_action]
@@ -240,8 +239,8 @@ def trainNetwork(s, readout, h_fc1, sess):
             b =  readout_s_ds[:,1]
 
             eps = 1 # Q values are typically 10- 30
-            loss = tf.nn.relu(b - (a + eps))
-            opt = tf.train.AdamOptimizer(LR).minimize(loss,var_list=(delta_s))
+            loss = tf.nn.relu(b - a + eps)
+            opt = tf.train.AdamOptimizer(LR).minimize(loss, var_list=(delta_s))
             # opt.run(feed_dict={})
 
         # update the old values
@@ -275,10 +274,16 @@ def trainNetwork(s, readout, h_fc1, sess):
 def playGame():
     sess = tf.InteractiveSession()
     s, readout, h_fc1 = createNetwork()
-    print(s)
-    print(readout)
-    print(h_fc1)
-    trainNetwork(s, readout, h_fc1, sess)
+
+    # subject of optimization
+    # gaussian noise, 1 set of perturbations which will be added to 4 frames
+    # same noise across every frame within stack within data set
+    # image data not normalized, gaussian distribution must bee scaled to [0, 255]
+    # tensor = np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80, 4))
+    tensor = (tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))))
+    delta_s = tf.Variable(initial_value=tensor, trainable=True)
+
+    trainNetwork(s, readout, h_fc1, delta_s, sess)
 
 def main():
     playGame()
