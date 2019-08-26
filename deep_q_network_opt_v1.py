@@ -1,6 +1,24 @@
 #!/usr/bin/env python
-from __future__ import print_function
+#*
 
+# distinction between dqn (vanilla) and this:
+# we want to formulate an addition to state, s, called "delta s", ds, which will cause the Q value of s+ds and a
+# target action, a^t, to be higher than the q value for s+ds and any other action. The implication is that adding ds
+# to our data will result in an action to be drawn. In cases where ds is not added/nothing is changed, we will
+# behave normally.
+# In order to retain the natural behaviour of a DQN controller, we will not be changing the weights or controller
+# for that matter, we will instead minimize the loss between Q(s+ds, a^t) and Q(s+ds, a), where a^t is the target a,
+# and a is any non-target a. Thee loss function will be (some) hinge loss: l(a,b) = max(b - (a + eps), 0), which
+# will essentially enforce the condition: a >= b + eps
+# An informal proof associated with the possibility this will work depends on the fact that our controller learns how
+# to behave well within a certain set of input states from the possible set of states it's been trained on,
+# called (here) the game-possible pixel space. This is the set of frames the game can generate under any scenario
+# within the game. The game-possible pixel space is small, relative to the pixel space, which is a space containing
+# all possible combinations of pixel intensities that a screen can generate. Given that ds blongs in the pixel space,
+# and s belongs in the game-possible pixel space, we can say that s+ds belongs in the pixel space, which the controller
+# may not know how to handle, which, if abused properly may result in a simple adversarial attack.
+
+from __future__ import print_function
 import tensorflow as tf
 import cv2
 import sys
@@ -9,6 +27,14 @@ import wrapped_flappy_bird as game
 import random
 import numpy as np
 from collections import deque
+
+# const for advesarial optimization:
+# flap = [0, 1]
+# noaction = [1, 0]
+action_target = [0, 1]
+LR = 0.01 # learning rate for optimizing ds
+# number of time steps in which to calculate ds, first 10 frames of game
+INTERVAL = 10
 
 GAME = 'bird' # the name of the game being played for log files
 ACTIONS = 2 # number of valid actions
@@ -75,11 +101,11 @@ def createNetwork():
 
     return s, readout, h_fc1
 
-def trainNetwork(s, readout, h_fc1, sess):
+def trainNetwork(s, readout, h_fc1, delta_s, sess):
     # define the cost function
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
-    readout_action = tf.reduce_sum(tf.multiply(readout, a), axis=1)
+    readout_action = tf.reduce_sum(tf.multiply(readout, a), reduction_indices=1)
     cost = tf.reduce_mean(tf.square(y - readout_action))
     train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
@@ -148,32 +174,75 @@ def trainNetwork(s, readout, h_fc1, sess):
             D.popleft()
 
         # only train if done observing
-        if t > OBSERVE:
-            # sample a minibatch to train on
-            minibatch = random.sample(list(D), BATCH)
+        if t > INTERVAL:
+            # sample a minibatch to optimize on
+            opt_batch = random.sample(list(D), INTERVAL)
 
             # get the batch variables
-            s_j_batch = [d[0] for d in minibatch]
-            a_batch = [d[1] for d in minibatch]
-            r_batch = [d[2] for d in minibatch]
-            s_j1_batch = [d[3] for d in minibatch]
+            s_opt_batch = [d[0] for d in opt_batch]
 
-            y_batch = []
-            readout_j1_batch = readout.eval(feed_dict = {s : s_j1_batch})
-            for i in range(0, len(minibatch)):
-                terminal = minibatch[i][4]
-                # if terminal, only equals reward
-                if terminal:
-                    y_batch.append(r_batch[i])
-                else:
-                    y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
+            s_ds = np.ndarray((INTERVAL, 80, 80, 4), dtype=float) # forward init.
 
+            # a_batch = [d[1] for d in minibatch]
+            # r_batch = [d[2] for d in minibatch]
+            # s_j1_batch = [d[3] for d in minibatch]
+
+            # y_batch = []
+            # readout_j_batch = readout.eval(feed_dict = {s : s_j_batch})
+            # readout_j1_batch = readout.eval(feed_dict = {s : s_j1_batch})
+            # for i in range(0, len(minibatch)):
+            #     terminal = minibatch[i][4]
+            #     # if terminal, only equals reward
+            #     if terminal:
+            #         y_batch.append(r_batch[i])
+            #     else:
+            #         y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
+
+            # IN ATTACK FORMULATION NOT NECESSARY, WE WANT TO RETAIN WEIGHTS, BUT TAKE THE PARAMS INTO ATTACK OPERATION
             # perform gradient step
-            train_step.run(feed_dict = {
-                y : y_batch,
-                a : a_batch,
-                s : s_j_batch}
-            )
+            # train_step.run(feed_dict = {
+            #     y : y_batch,
+            #     a : a_batch,
+            #     s : s_j_batch}
+            # )
+
+            # taking params into attack operation:
+            # intake batch of s_t, a_t, r_t, s_t1 resulted from a normal controller devised optimization, across batch by modulating ds,
+            # reduce the sum (expected) loss between Q(s+ds, a^t) and Q(s+ds, a), where a^t != a.
+            # subjects: batch of s_t, a_t, r_t, s_t1, size BATCH.
+            # Note: the training is complete, so in theory we shouldn't be using this as a SGD batch anymore.
+            #
+            #
+            # theory/idea:
+            # RL is less suceptible to a stationary attack since reproducing a setting is challenging. We can go through an
+            # interaction, record it, and then produce an optimization which will abuse that origional interaction, but when
+            # will that come in handy? In CV, usually repeated inputs are easy to produce, but in an RL setting there isn't
+            # opportunity for repeated input.
+            # if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
+
+            # input and noise which should result in target action to be drawn
+            s_ds = np.reshape(s_opt_batch,[INTERVAL, 80, 80, 4]) + delta_s
+
+            # Q values for both actions at state s + ds for entire batch
+            # you just need to feed into s
+            # ds generates automatically
+            # then you use s+ds as your new input
+            # talk after meeting have Q's
+            readout_s_ds = readout.eval(feed_dict={s : [s_opt_batch][0]})
+
+            # readout(s) = [Q(no flap), Q(flap)]
+            # a = readout[target_action]
+            a = tf.placeholder("float", INTERVAL) # readout_s_ds[1]
+            a = readout_s_ds[:,0]
+
+            # b = readout[!target_action]
+            b = tf.placeholder("float", INTERVAL) # readout_s_ds[0]
+            b =  readout_s_ds[:,1]
+
+            eps = 1 # Q values are typically 10- 30
+            loss = tf.nn.relu(b - a + eps)
+            opt = tf.train.AdamOptimizer(LR).minimize(loss, var_list=(delta_s))
+            # opt.run(feed_dict={})
 
         # update the old values
         s_t = s_t1
@@ -206,7 +275,16 @@ def trainNetwork(s, readout, h_fc1, sess):
 def playGame():
     sess = tf.InteractiveSession()
     s, readout, h_fc1 = createNetwork()
-    trainNetwork(s, readout, h_fc1, sess)
+
+    # subject of optimization
+    # gaussian noise, 1 set of perturbations which will be added to 4 frames
+    # same noise across every frame within stack within data set
+    # image data not normalized, gaussian distribution must bee scaled to [0, 255]
+    # tensor = np.random.normal(loc=(255/2), scale=(255*(0.01**0.5)), size=(INTERVAL, 80, 80, 4))
+    tensor = (tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))))
+    delta_s = tf.Variable(initial_value=tensor, trainable=True)
+
+    trainNetwork(s, readout, h_fc1, delta_s, sess)
 
 def main():
     playGame()
