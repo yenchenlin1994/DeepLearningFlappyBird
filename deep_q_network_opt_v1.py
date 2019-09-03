@@ -26,6 +26,7 @@ import wrapped_flappy_bird as game
 import random
 import numpy as np
 from collections import deque
+import tensorflow.contrib.slim as slim
 
 # const for advesarial optimization:
 # flap = [0, 1]
@@ -77,11 +78,22 @@ def createNetwork():
     W_fc2 = weight_variable([512, ACTIONS])
     b_fc2 = bias_variable([ACTIONS])
 
+    # new vars for optimization
+    delta_s = tf.Variable(
+        name="added_perturbation",
+        initial_value=tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))),
+        trainable=True)
+
     # input layer
     s = tf.placeholder("float", [None, 80, 80, 4])
+    optimization = tf.placeholder("bool")
+    s_opt = tf.cond(optimization,
+            lambda: s + delta_s, #T
+            lambda: s)  #F
+    tf.summary.histogram("s_opt", s_opt)
 
     # hidden layers
-    h_conv1 = tf.nn.relu(conv2d(s, W_conv1, 4) + b_conv1)
+    h_conv1 = tf.nn.relu(conv2d(s_opt, W_conv1, 4) + b_conv1)
     h_pool1 = max_pool_2x2(h_conv1)
 
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2, 2) + b_conv2)
@@ -98,15 +110,16 @@ def createNetwork():
     # readout layer
     readout = tf.matmul(h_fc1, W_fc2) + b_fc2
 
-    return s, readout, h_fc1
+    return s, optimization, delta_s, readout, h_fc1
 
-def trainNetwork(s, readout, h_fc1, sess):
+def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
+
     # define the cost function
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
     readout_action = tf.reduce_sum(tf.multiply(readout, a), reduction_indices=1)
     cost = tf.reduce_mean(tf.square(y - readout_action))
-    # train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
+    train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
     # open up a game state to communicate with emulator
     game_state = game.GameState()
@@ -126,8 +139,9 @@ def trainNetwork(s, readout, h_fc1, sess):
     ret, x_t = cv2.threshold(x_t,1,255,cv2.THRESH_BINARY)
     s_t = np.stack((x_t, x_t, x_t, x_t), axis=2)
 
-    # saving and loading networks
-    saver = tf.train.Saver()
+    # saving and loading networks\
+    variables_to_restore = slim.get_variables_to_restore(exclude=["added_perturbation"])
+    saver = tf.train.Saver(var_list=variables_to_restore)
     sess.run(tf.initialize_all_variables())
     checkpoint = tf.train.get_checkpoint_state("saved_networks")
     if checkpoint and checkpoint.model_checkpoint_path:
@@ -136,12 +150,19 @@ def trainNetwork(s, readout, h_fc1, sess):
     else:
         print("Could not find old network weights")
 
+    # # new vars for optimization
+    # delta_s = tf.Variable(
+    #     name="added_perturbation",
+    #     initial_value=tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))),
+    #     trainable=True)
+
     # start training
     epsilon = INITIAL_EPSILON
     t = 0
     while "flappy bird" != "angry bird":
         # choose an action epsilon greedily
-        readout_t = readout.eval(feed_dict={s : [s_t]})[0]
+        readout_t = readout.eval(feed_dict={s : [s_t],
+                                            optimization : False})[0]
         a_t = np.zeros([ACTIONS])
         action_index = 0
         if t % FRAME_PER_ACTION == 0:
@@ -172,38 +193,19 @@ def trainNetwork(s, readout, h_fc1, sess):
         if len(D) > REPLAY_MEMORY:
             D.popleft()
 
-        # only train if done observing
+        # attack first few frames
         if t > INTERVAL:
-            # sample a minibatch to optimize on
+            # generate a ds
+            #delta_s.initializer # since we restore the network variables, we need to init this one separately to
+                                  # save us some struggle with the saver
+
+            # sample a minibatch to optimize on, the entire sequence of frames thus far in the program
             opt_batch = random.sample(list(D), INTERVAL)
 
             # get the batch variables
-            s_opt_batch = [d[0] for d in opt_batch]
+            s_opt_batch = [d[0] for d in opt_batch] # only take stats form opt batch
 
-            s_ds = np.ndarray((INTERVAL, 80, 80, 4), dtype=float) # forward init.
-
-            # a_batch = [d[1] for d in minibatch]
-            # r_batch = [d[2] for d in minibatch]
-            # s_j1_batch = [d[3] for d in minibatch]
-
-            # y_batch = []
-            # readout_j_batch = readout.eval(feed_dict = {s : s_j_batch})
-            # readout_j1_batch = readout.eval(feed_dict = {s : s_j1_batch})
-            # for i in range(0, len(minibatch)):
-            #     terminal = minibatch[i][4]
-            #     # if terminal, only equals reward
-            #     if terminal:
-            #         y_batch.append(r_batch[i])
-            #     else:
-            #         y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
-
-            # IN ATTACK FORMULATION NOT NECESSARY, WE WANT TO RETAIN WEIGHTS, BUT TAKE THE PARAMS INTO ATTACK OPERATION
-            # perform gradient step
-            # train_step.run(feed_dict = {
-            #     y : y_batch,
-            #     a : a_batch,
-            #     s : s_j_batch}
-            # )
+            #delta_s.assign_add(s_opt_batch) # s+ds
 
             # taking params into attack operation:
             # intake batch of s_t, a_t, r_t, s_t1 resulted from a normal controller devised optimization, across batch by modulating ds,
@@ -221,25 +223,34 @@ def trainNetwork(s, readout, h_fc1, sess):
             # if we find that one adversarial input transfers well to other similar images, maybe we can make a case here.
 
             # Q values for both actions at state s + ds for entire batch
+
             # you just need to feed into s
             # ds generates automatically
             # then you use s+ds as your new input
             # talk after meeting have Q's
-            readout_s_ds = readout.eval(feed_dict={s : [s_opt_batch][0]})
+            readout_s_ds = readout.run(feed_dict={s : [s_opt_batch][0],
+                                                   optimization : True})
 
             # readout(s) = [Q(no flap), Q(flap)]
             # a = readout[target_action]
-            a = tf.placeholder("float", INTERVAL) # readout_s_ds[1]
-            a = readout_s_ds[:,0]
-
+            # a = tf.placeholder("float", shape=[INTERVAL,], name="a") # readout_s_ds[1]
+            # a_val = readout_s_ds[:,0]
+            #
             # b = readout[!target_action]
-            b = tf.placeholder("float", INTERVAL) # readout_s_ds[0]
-            b =  readout_s_ds[:,1]
+            # b = tf.placeholder("float", shape=[INTERVAL,], name="b") # readout_s_ds[0]
+            # b_val = readout_s_ds[:,1]
+            #
+            ops = tf.get_default_graph().get_operations()
+            print("ops", ops)
+            #
+            for op in tf.get_default_graph().get_operations():
+                print(str(op))
 
             eps = 1 # Q values are typically 10- 30
-            loss = tf.nn.relu(b - a + eps)
-            opt = tf.train.AdamOptimizer(LR).minimize(loss, var_list=(s_opt_batch))
+            loss = tf.nn.relu(readout_s_ds[:,1] - readout_s_ds[:,0] + eps)
+            opt = tf.train.GradientDescentOptimizer(LR, name="GRADDESC").minimize(loss, var_list=[delta_s])
             opt.run()
+            print("tem")
 
         # update the old values
         s_t = s_t1
@@ -270,9 +281,10 @@ def trainNetwork(s, readout, h_fc1, sess):
         '''
 
 def playGame():
-    sess = tf.InteractiveSession()
-    s, readout, h_fc1 = createNetwork()
-    trainNetwork(s, readout, h_fc1, sess)
+    graph = tf.Graph()
+    sess = tf.InteractiveSession(graph=graph)
+    s, optimization, delta_s, readout, h_fc1 = createNetwork()
+    trainNetwork(s, optimization, delta_s, readout, h_fc1, sess)
 
 def main():
     playGame()
