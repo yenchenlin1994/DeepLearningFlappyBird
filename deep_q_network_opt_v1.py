@@ -49,11 +49,11 @@ FRAME_PER_ACTION = 1
 
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev = 0.01)
-    return tf.Variable(initial)
+    return tf.Variable(initial, trainable=False)
 
 def bias_variable(shape):
     initial = tf.constant(0.01, shape = shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, trainable=False)
 
 def conv2d(x, W, stride):
     return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = "SAME")
@@ -87,10 +87,7 @@ def createNetwork():
     # input layer
     s = tf.placeholder("float", [None, 80, 80, 4])
     optimization = tf.placeholder("bool")
-    s_opt = tf.cond(optimization,
-            lambda: s + delta_s, #T
-            lambda: s)  #F
-    tf.summary.histogram("s_opt", s_opt)
+    s_opt = tf.add(s, delta_s)
 
     # hidden layers
     h_conv1 = tf.nn.relu(conv2d(s_opt, W_conv1, 4) + b_conv1)
@@ -110,9 +107,9 @@ def createNetwork():
     # readout layer
     readout = tf.matmul(h_fc1, W_fc2) + b_fc2
 
-    return s, optimization, delta_s, readout, h_fc1
+    return s, readout, h_fc1
 
-def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
+def trainNetwork(s, readout, h_fc1, sess):
 
     # define the cost function
     a = tf.placeholder("float", [None, ACTIONS])
@@ -150,19 +147,18 @@ def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
     else:
         print("Could not find old network weights")
 
-    # # new vars for optimization
-    # delta_s = tf.Variable(
-    #     name="added_perturbation",
-    #     initial_value=tf.random.normal([INTERVAL, 80, 80, 4], mean=(255.0 / 2), stddev=(255 * (0.01 ** 0.5))),
-    #     trainable=True)
+    eps = 1  # Q values are typically 10- 30
+    q_noflap = tf.placeholder(shape=(INTERVAL,), dtype=float)
+    q_flap = tf.placeholder(shape=(INTERVAL,), dtype=float)
+    loss = tf.nn.relu(q_noflap - q_flap + eps)
+    opt = tf.train.AdamOptimizer(LR).minimize(loss)
 
     # start training
     epsilon = INITIAL_EPSILON
     t = 0
     while "flappy bird" != "angry bird":
         # choose an action epsilon greedily
-        readout_t = readout.eval(feed_dict={s : [s_t],
-                                            optimization : False})[0]
+        readout_t = readout.eval(feed_dict={s : [s_t]})
         a_t = np.zeros([ACTIONS])
         action_index = 0
         if t % FRAME_PER_ACTION == 0:
@@ -228,8 +224,7 @@ def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
             # ds generates automatically
             # then you use s+ds as your new input
             # talk after meeting have Q's
-            readout_s_ds = readout.run(feed_dict={s : [s_opt_batch][0],
-                                                   optimization : True})
+            readout_s_ds = readout.eval(feed_dict={s : [s_opt_batch][0]})
 
             # readout(s) = [Q(no flap), Q(flap)]
             # a = readout[target_action]
@@ -246,9 +241,6 @@ def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
             for op in tf.get_default_graph().get_operations():
                 print(str(op))
 
-            eps = 1 # Q values are typically 10- 30
-            loss = tf.nn.relu(readout_s_ds[:,1] - readout_s_ds[:,0] + eps)
-            opt = tf.train.GradientDescentOptimizer(LR, name="GRADDESC").minimize(loss, var_list=[delta_s])
             opt.run()
             print("tem")
 
@@ -283,8 +275,8 @@ def trainNetwork(s, optimization, delta_s, readout, h_fc1, sess):
 def playGame():
     graph = tf.Graph()
     sess = tf.InteractiveSession(graph=graph)
-    s, optimization, delta_s, readout, h_fc1 = createNetwork()
-    trainNetwork(s, optimization, delta_s, readout, h_fc1, sess)
+    s, readout, h_fc1 = createNetwork()
+    trainNetwork(s, readout, h_fc1, sess)
 
 def main():
     playGame()
