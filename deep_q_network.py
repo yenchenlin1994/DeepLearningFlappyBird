@@ -9,17 +9,33 @@ import wrapped_flappy_bird as game
 import random
 import numpy as np
 from collections import deque
+import argparse
+
+try:
+    import wandb
+except:
+    wandb = None
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--gamma', default=0.99, type=float, help='Decay rate of past observations')
+parser.add_argument('--observe', default=100000, type=int, help='Timesteps to observe before training')
+parser.add_argument('--explore', default=200000, type=int, help='Frames over which to anneal epsilon')
+parser.add_argument('--initial-epsilon', default=0.0001, type=float, help='Starting value of epsilon')
+parser.add_argument('--final-epsilon', default=0.0001, type=float, help='Final value of epsilon')
+parser.add_argument('--replay-memory', default=50000, type=int, help='Number of previous transitions to remember')
+parser.add_argument('--batch-size', default=32, type=int, help='Size of minibatch')
+parser.add_argument('--frames-per-action', default=1, type=int, help='Frames per acction')
+
+args = parser.parse_args()
+
+if wandb:
+    wandb.init(
+        config=vars(args),
+        sync_tensorboard=True,
+        anonymous="allow")
 
 GAME = 'bird' # the name of the game being played for log files
 ACTIONS = 2 # number of valid actions
-GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 100000. # timesteps to observe before training
-EXPLORE = 2000000. # frames over which to anneal epsilon
-FINAL_EPSILON = 0.0001 # final value of epsilon
-INITIAL_EPSILON = 0.0001 # starting value of epsilon
-REPLAY_MEMORY = 50000 # number of previous transitions to remember
-BATCH = 32 # size of minibatch
-FRAME_PER_ACTION = 1
 
 def weight_variable(shape):
     initial = tf.truncated_normal(shape, stddev = 0.01)
@@ -112,14 +128,14 @@ def trainNetwork(s, readout, h_fc1, sess):
         print("Could not find old network weights")
 
     # start training
-    epsilon = INITIAL_EPSILON
+    epsilon = args.initial_epsilon
     t = 0
     while "flappy bird" != "angry bird":
         # choose an action epsilon greedily
         readout_t = readout.eval(feed_dict={s : [s_t]})[0]
         a_t = np.zeros([ACTIONS])
         action_index = 0
-        if t % FRAME_PER_ACTION == 0:
+        if t % args.frames_per_action == 0:
             if random.random() <= epsilon:
                 print("----------Random Action----------")
                 action_index = random.randrange(ACTIONS)
@@ -131,8 +147,8 @@ def trainNetwork(s, readout, h_fc1, sess):
             a_t[0] = 1 # do nothing
 
         # scale down epsilon
-        if epsilon > FINAL_EPSILON and t > OBSERVE:
-            epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
+        if epsilon > args.final_epsilon and t > args.observe:
+            epsilon -= (args.initial_epsilon - args.final_epsilon) / args.explore
 
         # run the selected action and observe next state and reward
         x_t1_colored, r_t, terminal = game_state.frame_step(a_t)
@@ -144,13 +160,13 @@ def trainNetwork(s, readout, h_fc1, sess):
 
         # store the transition in D
         D.append((s_t, a_t, r_t, s_t1, terminal))
-        if len(D) > REPLAY_MEMORY:
+        if len(D) > args.replay_memory:
             D.popleft()
 
         # only train if done observing
-        if t > OBSERVE:
+        if t > args.observe:
             # sample a minibatch to train on
-            minibatch = random.sample(D, BATCH)
+            minibatch = random.sample(D, args.batch_size)
 
             # get the batch variables
             s_j_batch = [d[0] for d in minibatch]
@@ -166,7 +182,7 @@ def trainNetwork(s, readout, h_fc1, sess):
                 if terminal:
                     y_batch.append(r_batch[i])
                 else:
-                    y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
+                    y_batch.append(r_batch[i] + args.gamma * np.max(readout_j1_batch[i]))
 
             # perform gradient step
             train_step.run(feed_dict = {
@@ -181,13 +197,14 @@ def trainNetwork(s, readout, h_fc1, sess):
 
         # save progress every 10000 iterations
         if t % 10000 == 0:
-            saver.save(sess, 'saved_networks/' + GAME + '-dqn', global_step = t)
+            saver.save(sess, 'saved_networks/' + GAME + '-dqn',
+                global_step = t)
 
         # print info
         state = ""
-        if t <= OBSERVE:
+        if t <= args.observe:
             state = "observe"
-        elif t > OBSERVE and t <= OBSERVE + EXPLORE:
+        elif t > args.observe and t <= args.observe + args.explore:
             state = "explore"
         else:
             state = "train"
@@ -195,6 +212,13 @@ def trainNetwork(s, readout, h_fc1, sess):
         print("TIMESTEP", t, "/ STATE", state, \
             "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \
             "/ Q_MAX %e" % np.max(readout_t))
+
+        if wandb:
+            wandb.log({
+                "epsilon": epsilon,
+                "q_max": np.max(readout_t)
+            }, step=t)
+
         # write info to files
         '''
         if t % 10000 <= 100:
@@ -206,6 +230,7 @@ def trainNetwork(s, readout, h_fc1, sess):
 def playGame():
     sess = tf.InteractiveSession()
     s, readout, h_fc1 = createNetwork()
+    tf.compat.v1.summary.FileWriter(wandb.run.dir, sess.graph)
     trainNetwork(s, readout, h_fc1, sess)
 
 def main():
