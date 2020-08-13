@@ -20,6 +20,16 @@ cd DeepLearningFlappyBird
 python deep_q_network.py
 ```
 
+In order to run with TensorFlow 2.*, edit file [deep_q_network.py](./deep_q_network.py) in root directory, replace
+```python3
+import tensorflow as tf
+```
+by
+```python3
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+```
+
 ## What is Deep Q-Network?
 It is a convolutional neural network, trained with a variant of Q-learning, whose input is raw pixels and whose output is a value function estimating future rewards.
 
